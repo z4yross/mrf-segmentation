@@ -2,62 +2,61 @@ class Node {
 
   Node[] blanket;
 
-  float bgProb;
-  float fgProb;
-
-  boolean isLabeled;
-  boolean isBg;
-
   int O;
   int L;
 
-  Node(int O) {
+  boolean visited = false;
+  boolean movible = true;
+
+  Node(int O, int L) {
     this.O = O;
-    this.L = random(10) >= 5? 1 : 0;
+    this.L = L;
   }
 
-  Node(int O, boolean isLabeled, boolean isBg) {
-    this.O = O;
-    this.L = random(10) >= 5 ? 1 : 0;
-    this.isLabeled = isLabeled;
-    this.isBg = isBg;
+  float individualPotential(float sigma, float mu) {
+    return (1/2) * log(sigma * sigma) + pow(this.O - mu, 2) / (2.0 * sigma * sigma);
   }
 
-  float individualPotential(int L) {
-    if (isLabeled) {
-      if (isBg)
-        return L == 0 ? 0: Float.POSITIVE_INFINITY;
-      else
-        return L == 0 ? Float.POSITIVE_INFINITY: 0;
-    } else {
-      return L == 0 ? this.O : 255 - this.O;
-    }
+  float pairPotential(float L1, float L2) {
+    return L1 == L2 ? -1 : 0;
   }
 
-  float pairPotential(float lambda, float L1, float O1, float L2, float O2) {
-    return lambda * abs(L1 - L2) * exp(-(pow(O1 - O2, 2) / (2 * (O1 * O1))));
-  }
-
-  float blanketPotential(float lambda, int L) {
+  float blanketPotential(float beta, int L) {
     float sum = 0;
     for (Node n : this.blanket)
-      sum += pairPotential(lambda, L, this.O, n.L, n.O);
-    return sum;
+      sum += pairPotential(L, n.L) * beta;
+    return sum ;
   }
 
-  void setEnergy(float lambda) {
-    float p = -exp(individualPotential(this.L) + blanketPotential(lambda, this.L));
-    if (this.L == 0) {
-      bgProb = p;
-      fgProb = -exp(individualPotential(1) + blanketPotential(lambda, 1));
-    } else {
-      fgProb = p;
-      bgProb = -exp(individualPotential(0) + blanketPotential(lambda, 0));
+  float nBEnergy(float beta, float sigma, float mu) {
+    return individualPotential(sigma, mu) + blanketPotential(beta, this.L);
+  }
+
+  float gpairPotential(float sigma, float L1, float L2, float Oj) {
+    return L1 == L2 ? -1 : 0;
+  }
+
+  float smax(float[] sigma) {
+    float max = 0;
+    for (Node n : this.blanket) {
+      float pp = gpairPotential(sigma[n.L], this.L, n.L, n.O);
+      if(pp > max) max = pp;
     }
+    return max;
+  }
+  
+  float gblanketPotential(float sigma, int L, float W0, int k, int kgicm, float beta) {
+    float sum = 0;
+    float wcj = 0;
+    for (Node n : this.blanket) {
+      if(k >= 1 && k <= kgicm && n.visited) wcj = W0 * (kgicm / (kgicm - k + 1));
+      if(k >= kgicm && n.visited) wcj = 1;
+      sum += gpairPotential(sigma, L, n.L, n.O) * wcj * beta;
+    }
+    return sum ;
+  }
 
-
-    //fgProb = exp(individualPotential(1) + blanketPotential(lambda, 1));
-
-    this.L = bgProb > fgProb ? 0 : 1;
+  float gEnergyUp(float sigma, float mu, int L, float W0, int k, int kgicm, float beta) {
+    return individualPotential(sigma, mu) + gblanketPotential(sigma, L, W0, k, kgicm, beta);
   }
 }
